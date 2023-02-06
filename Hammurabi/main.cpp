@@ -36,25 +36,31 @@ private:
     bool can_run_round_, plague_;
     int population_died_, population_arrived_;
     int wheat_risen_, wheat_per_akr_, wheat_stollen_, price_;
+    int sum_years_population_, sum_dead_;
 public:
     int round_; 
     // конструктор для новой игры
     City(): round_(0), population_(100), wheat_(2800), space_(1000),
             can_run_round_(true), plague_(false),
             population_died_(0), population_arrived_(0),
-            wheat_risen_(0), wheat_per_akr_(0), wheat_stollen_(0), price_(get_random_int(17, 26)) {}
+            wheat_risen_(0), wheat_per_akr_(0), wheat_stollen_(0), price_(get_random_int(17, 26)),
+            sum_years_population_(0), sum_dead_(0) {}
     // конструктор для загруженной игры
     City(int round, int population, int wheat, int space,
         bool can_run_round, bool plague,
         int population_died, int population_arrived,
-        int wheat_risen, int wheat_per_akr, int wheat_stollen, int price): 
+        int wheat_risen, int wheat_per_akr, int wheat_stollen, int price,
+        int sum_years_population, int sum_dead): 
             round_(round), population_(population), wheat_(wheat), space_(space),
             can_run_round_(can_run_round), plague_(plague),
             population_died_(population_died), population_arrived_(population_arrived),
-            wheat_risen_(wheat_risen), wheat_per_akr_(wheat_per_akr), wheat_stollen_(wheat_stollen), price_(price) {}
+            wheat_risen_(wheat_risen), wheat_per_akr_(wheat_per_akr), wheat_stollen_(wheat_stollen), price_(price),
+            sum_years_population_(sum_years_population), sum_dead_(sum_dead) {}
     // Можем продолжать игру?
     bool can_run_round() {return can_run_round_;}
     int round_inc() {round_++; return round_;}
+    float get_P() {return 1.0*sum_dead_/sum_years_population_;}
+    int get_L() {return space_/population_;}
     // Проверка возможности хода, по введенным игроком данных
     bool check_input(int acre_diff, int wheat_eat, int acre_to_sow);
     // Совершить ход игры, вернулось true - значит все хорошо, вернулось false - значит игрок проиграл
@@ -92,7 +98,7 @@ void City::print_current_city_state() {
 
 std::string City::read_all_param() {
     std::stringstream result_string;
-    result_string << round_ << std::endl << population_ << std::endl << wheat_ << std::endl << space_ << std::endl << can_run_round_ << std::endl << plague_ << std::endl << population_died_ << std::endl << population_arrived_ << std::endl << wheat_risen_ << std::endl << wheat_per_akr_ << std::endl << wheat_stollen_ << std::endl << price_ << std::endl;
+    result_string << round_ << std::endl << population_ << std::endl << wheat_ << std::endl << space_ << std::endl << can_run_round_ << std::endl << plague_ << std::endl << population_died_ << std::endl << population_arrived_ << std::endl << wheat_risen_ << std::endl << wheat_per_akr_ << std::endl << wheat_stollen_ << std::endl << price_ << std::endl << sum_years_population_ << std::endl << sum_dead_ << std::endl;
     return result_string.str();
 }
 
@@ -105,16 +111,17 @@ bool save_file_exists() {
 
 void load_game(City &city) {
     if(save_file_exists()) {
-        std::cout << "save file found, loading...\n\n";
+        std::cout << "\nsave file found, loading...\n";
         int round, population, space;
         float wheat;
         int can_run_round_int, plague_int;
         int population_died, population_arrived;
         // сколько собрали бушелей с акра, сколько украли мыши, цена за акр
         int wheat_risen, wheat_per_akr, wheat_stollen, price;
+        int sum_years_population, sum_dead;
 
         std::ifstream fin("SaveFile");
-        fin >> round >> population >> wheat >> space >> can_run_round_int >> plague_int >> population_died >> population_arrived >> wheat_risen >> wheat_per_akr >> wheat_stollen >> price;
+        fin >> round >> population >> wheat >> space >> can_run_round_int >> plague_int >> population_died >> population_arrived >> wheat_risen >> wheat_per_akr >> wheat_stollen >> price >> sum_years_population >> sum_dead;
 
         bool can_run_round = true, plague = true;
         if (can_run_round_int == 0) can_run_round = false;
@@ -122,7 +129,8 @@ void load_game(City &city) {
         city = City(round, population, wheat, space,
                     can_run_round, plague,
                     population_died, population_arrived,
-                    wheat_risen, wheat_per_akr, wheat_stollen, price);
+                    wheat_risen, wheat_per_akr, wheat_stollen, price,
+                    sum_years_population, sum_dead);
 
         fin.close();
     }
@@ -147,13 +155,16 @@ bool City::check_input(int acre_diff, int wheat_eat, int acre_to_sow) {
     return true;
 }
 
-void handle_input(int &acre_diff, int &wheat_eat, int &acre_to_sow, City &city) {
+bool handle_input(int &acre_diff, int &wheat_eat, int &acre_to_sow, City &city) {
     int acre_buy = 0;
     int acre_sell = 0;
     std::string temp_string = "";
-    std::cout << "What is your next move Lord? (save? y/n)\n";
+    std::cout << "What is your next move Lord? (save and leave? y/n)\n";
     std::cin >> temp_string;
-    if (temp_string == "y") save_progress(city);
+    if (temp_string == "y") {
+        save_progress(city);
+        return false;
+    }
     do {
         std::cout << "How many acre are you willing to buy? ";
         std::cin >> acre_buy;
@@ -165,6 +176,7 @@ void handle_input(int &acre_diff, int &wheat_eat, int &acre_to_sow, City &city) 
         std::cin >> acre_to_sow;
         acre_diff = acre_buy - acre_sell;
     } while (!city.check_input(acre_diff, wheat_eat, acre_to_sow));
+    return true;
 }
 
 bool City::make_turn(int acre_diff, int wheat_eat, int acre_to_sow) {
@@ -194,10 +206,13 @@ bool City::make_turn(int acre_diff, int wheat_eat, int acre_to_sow) {
     if (population_arrived_ > 50) population_arrived_ = 50;
     population_ += population_arrived_;
 
+    sum_years_population_ += population_;
     plague_ = get_random_bool(0.15);
     if (plague_) population_ = (int)population_ / 2;
 
     price_ = get_random_int(17, 26);
+    sum_years_population_ += 
+    sum_dead_ += population_died_;
     return true;
 }
 
@@ -208,14 +223,21 @@ void start_game(City &city) {
     int round = city.round_;
     while(city.can_run_round()) {
         city.print_current_city_state();
-        handle_input(acre_diff, wheat_eat, acre_to_sow, city);
+        if(!handle_input(acre_diff, wheat_eat, acre_to_sow, city)) {
+            return;
+        };
         if (city.make_turn(acre_diff, wheat_eat, acre_to_sow)){
             round = city.round_inc();
         } else {
             break;
         }
         if (round == 10) {
-            std::cout << "CONGRATULATION! WE SURVIVED 10 YEARS UNDER YOUR COMMAND, MY LORD\n\n";
+            float P = city.get_P();
+            int L = city.get_L();
+            if (P > 0.33 && L < 7) std::cout << "\nBecause of your incompetence in government, the people staged a riot and expelled you from their cities. Now you are forced to drag out a miserable existence in exile.\n\n";
+            else if (P > 0.10 && L < 9) std::cout << "\nYou ruled with an iron fist, like Nero and Ivan the Terrible. The people breathed a sigh of relief, and no one else wants to see you as a ruler\n\n";
+            else if (P > 0.03 && L < 10) std::cout << "\nYou did quite well, you certainly have detractors, but many would like to see you at the head of the city again\n\n";
+            else std::cout << "\nFantastic! Charlemagne, Disraeli and Jefferson couldn't have done better together\n\n";
             break;
         }
     }
@@ -225,6 +247,5 @@ int main(int argc, char const *argv[]) {
     City Hammurabi;
     load_game(Hammurabi);
     start_game(Hammurabi);
-    //save_progress(Hammurabi);
     return 0;
 }
